@@ -1,7 +1,7 @@
 /* ---- SETTINGS (edit here) ---- */
 var CONFIG = {
   wa1: '917411113053',            // Punith Venkatesh WhatsApp
-  leadEndpoint: '',               // paste the Google Apps Script web-app URL here (see form-backend/SETUP.md). Empty = WhatsApp fallback
+  leadEndpoint: 'https://script.google.com/macros/s/AKfycbz3y2sOlPb5LaQ1iDpx6kufNPHCtC0rxkYNdQYKogV_NvxrXaC6ovy9EMOJlxcx-QgjQw/exec',               // paste the Google Apps Script web-app URL here (see form-backend/SETUP.md). Empty = WhatsApp fallback
   /* Package rates in Rs per sq ft of built-up area. Leave '' until confirmed - the page then says "Get a quote". */
   packages: [
     { name: 'Economy',      rate: '1869', stilt: '', desc: 'Dependable, code-compliant home with practical material grades.' },
