@@ -1,7 +1,7 @@
 /* ---- SETTINGS (edit here) ---- */
 var CONFIG = {
   wa1: '917411113053',            // Punith Venkatesh WhatsApp
-  leadEndpoint: '',               // optional: URL that accepts a JSON POST (e.g. the FastAPI /api/contact). Empty = open WhatsApp with the details filled in
+  leadEndpoint: '',               // paste the Google Apps Script web-app URL here (see form-backend/SETUP.md). Empty = WhatsApp fallback
   /* Package rates in Rs per sq ft of built-up area. Leave '' until confirmed - the page then says "Get a quote". */
   packages: [
     { name: 'Economy',      rate: '1869', stilt: '', desc: 'Dependable, code-compliant home with practical material grades.' },
@@ -15,20 +15,29 @@ var CONFIG = {
   warrantyYears: ''               // structural warranty in years, e.g. '10'. '' = shows "Ask us"
 };
 
-/* lead delivery shared by every form and the chatbot */
+/* lead delivery shared by every form and the chatbot.
+   With CONFIG.leadEndpoint set (Google Apps Script web app) every submission goes to the Google Sheet + email
+   automatically. Without it (or if the network fails) it falls back to a pre-filled WhatsApp message. */
+function slvWhatsApp(lead) {
+  var m = 'Hello SLV Infra Tech, I am ' + lead.name + ' (+91 ' + lead.phone + ').' +
+    (lead.topic ? ' Enquiry: ' + lead.topic + '.' : '') + (lead.service ? ' Service: ' + lead.service + '.' : '') +
+    (lead.plot ? ' Plot size: ' + lead.plot + '.' : '') + (lead.floors ? ' Floors: ' + lead.floors + '.' : '') +
+    (lead.loc ? ' Location: ' + lead.loc + '.' : '') + (lead.when ? ' Timeline: ' + lead.when + '.' : '') + (lead.note ? ' ' + lead.note : '');
+  window.open('https://wa.me/' + CONFIG.wa1 + '?text=' + encodeURIComponent(m), '_blank');
+}
 window.slvSendLead = function (lead, done) {
   lead.page = location.pathname; lead.time = new Date().toISOString();
   if (CONFIG.leadEndpoint) {
-    fetch(CONFIG.leadEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) })
-      .then(function (r) { done(r.ok ? 'sent' : 'fail'); }).catch(function () { done('fail'); });
-  } else {
-    var m = 'Hello SLV Infra Tech, I am ' + lead.name + ' (+91 ' + lead.phone + ').' +
-      (lead.topic ? ' Enquiry: ' + lead.topic + '.' : '') + (lead.service ? ' Service: ' + lead.service + '.' : '') +
-      (lead.plot ? ' Plot size: ' + lead.plot + '.' : '') + (lead.floors ? ' Floors: ' + lead.floors + '.' : '') +
-      (lead.loc ? ' Location: ' + lead.loc + '.' : '') + (lead.when ? ' Timeline: ' + lead.when + '.' : '') + (lead.note ? ' ' + lead.note : '');
-    window.open('https://wa.me/' + CONFIG.wa1 + '?text=' + encodeURIComponent(m), '_blank');
-    done('wa');
-  }
+    /* text/plain + no-cors avoids the browser pre-flight that Apps Script web apps do not answer */
+    fetch(CONFIG.leadEndpoint, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(lead) })
+      .then(function () { done('sent'); })
+      .catch(function () { slvWhatsApp(lead); done('wa'); });
+  } else { slvWhatsApp(lead); done('wa'); }
+};
+window.slvThanks = function (box, st) {
+  if (!box) return;
+  var p = box.querySelector('p'); if (!p) return;
+  p.textContent = st === 'sent' ? 'Your details have reached our directors. We will call you during working hours (Monday – Saturday, 9 AM – 6 PM).' : 'Your details are ready - please press Send in WhatsApp so our directors receive them. We will get back to you during working hours.';
 };
 function validPhone(v) { var d = String(v || '').replace(/\D/g, ''); return d.length >= 10 && /^[6-9]\d{9}$/.test(d.slice(-10)); }
 
@@ -61,7 +70,7 @@ document.querySelectorAll('form[data-lead]').forEach(function (f) {
     var l = { name: d.get('name'), phone: String(d.get('phone') || '').replace(/\D/g, '').slice(-10), service: d.get('service'), plot: d.get('plot'), loc: d.get('loc'), topic: d.get('topic'), when: d.get('when'), note: d.get('message') };
     window.slvSendLead(l, function (st) {
       var th = f.parentNode.querySelector('.thanks');
-      f.style.display = 'none'; if (th) { th.style.display = 'block'; if (st === 'fail') th.querySelector('p').textContent = 'Could not send. Please call +91 74111 13053.'; }
+      f.style.display = 'none'; if (th) { th.style.display = 'block'; window.slvThanks(th, st); }
     });
   });
 });
@@ -169,7 +178,7 @@ document.querySelectorAll('form[data-steps]').forEach(function (f) {
     if (!ok) return;
     if (i < steps.length - 1) { i++; show(); return; }
     var d = new FormData(f);
-    window.slvSendLead({ name: d.get('name'), phone: String(d.get('phone')).replace(/\D/g, '').slice(-10), loc: d.get('loc'), plot: d.get('plot'), when: d.get('when'), note: d.get('message'), topic: f.dataset.topic }, function () { f.style.display = 'none'; f.parentNode.querySelector('.thanks').style.display = 'block'; });
+    window.slvSendLead({ name: d.get('name'), phone: String(d.get('phone')).replace(/\D/g, '').slice(-10), loc: d.get('loc'), plot: d.get('plot'), when: d.get('when'), note: d.get('message'), topic: f.dataset.topic }, function (st) { f.style.display = 'none'; var th = f.parentNode.querySelector('.thanks'); th.style.display = 'block'; window.slvThanks(th, st); });
   };
   show();
 });
@@ -197,8 +206,8 @@ document.querySelectorAll('form[data-steps]').forEach(function (f) {
       if (!ok) return;
     }
     if (i < steps.length - 1) { i++; show(); return; }
-    window.slvSendLead({ name: data.name, phone: String(data.phone).replace(/\D/g, '').slice(-10), loc: data.loc, plot: data.plot, floors: data.floors, when: data.when, topic: 'Dream Home Planner' }, function () {
-      pl.querySelector('.pwrap').style.display = 'none'; pl.querySelector('.thanks').style.display = 'block';
+    window.slvSendLead({ name: data.name, phone: String(data.phone).replace(/\D/g, '').slice(-10), loc: data.loc, plot: data.plot, floors: data.floors, when: data.when, topic: 'Dream Home Planner' }, function (st) {
+      pl.querySelector('.pwrap').style.display = 'none'; pl.querySelector('.thanks').style.display = 'block'; window.slvThanks(pl.querySelector('.thanks'), st);
     });
   };
   show();
